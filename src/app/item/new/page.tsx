@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useMemo } from "react";
 import Image from "next/image";
+import { supabase } from "@/lib/supabase";
 
 type ItemType = "consumable" | "tool";
 
@@ -29,6 +29,11 @@ export default function NewItemPage() {
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const baseUrl = useMemo(() => {
+    if (typeof window !== "undefined") return window.location.origin;
+    return process.env.NEXT_PUBLIC_BASE_URL ?? "";
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,25 +156,20 @@ export default function NewItemPage() {
         {error && <p className="text-red-600">{error}</p>}
       </form>
 
+      {/* After create: show the single "notify" QR only */}
       {createdId && (
         <div className="mt-8">
-          <h2 className="font-medium mb-2">Label / QR</h2>
-          <div className="flex items-center gap-4">
-            <Image
-              src={`/api/qr?id=${createdId}`}
-              alt="QR"
-              width={160}
-              height={160}
-              className="border rounded"
-              unoptimized
-            />
-            <div className="space-y-2">
-              <a className="text-blue-600 underline" href={`/item/${createdId}`} target="_blank" rel="noreferrer">
-                Open item page
-              </a>
-              <p className="text-sm text-gray-600 break-all">{createdId}</p>
-            </div>
-          </div>
+          <h2 className="font-medium mb-2">Label QR (scan to notify)</h2>
+          <Image
+            src={`/api/qr?url=${encodeURIComponent(
+              `${baseUrl}/item/${createdId}?notify=1`
+            )}&v=3`}
+            alt="Notify QR"
+            width={180}
+            height={180}
+            className="border rounded"
+            unoptimized
+          />
         </div>
       )}
     </div>

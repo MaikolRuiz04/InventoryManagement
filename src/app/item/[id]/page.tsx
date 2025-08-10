@@ -1,4 +1,3 @@
-// src/app/item/[id]/page.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -22,59 +21,51 @@ export default function ItemPage() {
   const search = useSearchParams();
 
   const [item, setItem] = useState<Item | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  // Compute a base URL that works locally, preview, and prod
+  // Works on localhost, preview, prod
   const baseUrl = useMemo(() => {
     if (typeof window !== "undefined") return window.location.origin;
     return process.env.NEXT_PUBLIC_BASE_URL ?? "";
   }, []);
 
-  const loadItem = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("items")
-      .select("*")
-      .eq("id", id)
-      .single();
-    if (error) {
-      setError(error.message);
-      setItem(null);
-    } else {
+  // Load item
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) setErr(error.message);
       setItem(data as Item);
-    }
-    setLoading(false);
+      setLoading(false);
+    })();
   }, [id]);
 
-  useEffect(() => {
-    void loadItem();
-  }, [loadItem]);
-
+  // Send email
   const emailReplenish = useCallback(async () => {
-    if (!item) return;
+    if (!item || sent) return;
     try {
-      const res = await fetch("/api/notify-email", {
+      const r = await fetch("/api/notify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itemId: item.id,
           itemName: item.name,
-          message: "Out of stock. Please replenish.",
+          message: "Auto-notify via QR scan",
         }),
       });
-      if (!res.ok) throw new Error("Email request failed");
-      setMessage("Notification email sent!");
-    } catch (e) {
-      setMessage("Failed to send email");
-      // eslint-disable-next-line no-console
-      console.error(e);
+      if (!r.ok) throw new Error("Notify failed");
+      setSent(true);
+    } catch {
+      setErr("Failed to send email");
     }
-  }, [item]);
+  }, [item, sent]);
 
-  // Auto-notify if ?notify=1 is present
+  // Auto-notify when opened via QR (…/item/[id]?notify=1)
   useEffect(() => {
     if (item && search.get("notify") === "1") {
       void emailReplenish();
@@ -82,17 +73,33 @@ export default function ItemPage() {
   }, [item, search, emailReplenish]);
 
   if (loading) return <div className="p-6">Loading…</div>;
-  if (error || !item) return <div className="p-6 text-red-600">Item not found.</div>;
+  if (err || !item) return <div className="p-6 text-red-600">Item not found.</div>;
 
-  const low =
-    item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
+  const low = item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
 
+  // If this was a notify scan, show a tiny confirmation screen
+  if (search.get("notify") === "1") {
+    return (
+      <div className="max-w-md space-y-4">
+        <h1 className="text-2xl font-semibold">Thanks!</h1>
+        <p>
+          Notification sent to the lab manager for <b>{item.name}</b>.
+        </p>
+        {sent ? (
+          <p className="text-green-700">Email sent ✅</p>
+        ) : (
+          <p className="text-gray-600">Sending…</p>
+        )}
+      </div>
+    );
+  }
+
+  // Regular item page (shows details + the single "notify" QR)
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">{item.name}</h1>
       <div className="text-sm text-gray-600">Type: {item.type}</div>
       {item.location && <div>Location: {item.location}</div>}
-
       {item.type === "consumable" && (
         <div className="text-sm">
           Qty: <b>{item.qty ?? 0}</b>{" "}
@@ -105,7 +112,6 @@ export default function ItemPage() {
           </span>
         </div>
       )}
-
       {item.buy_link && (
         <div>
           <a
@@ -118,45 +124,21 @@ export default function ItemPage() {
           </a>
         </div>
       )}
-
       {item.notes && <div className="whitespace-pre-wrap">{item.notes}</div>}
 
-      {/* View QR */}
+      {/* Single QR = scan to notify */}
       <div className="mt-6">
-        <Image
-          src={`/api/qr?id=${item.id}&v=2`}
-          alt="QR to view item"
-          width={160}
-          height={160}
-          className="border rounded"
-          unoptimized
-        />
-      </div>
-
-      {/* Notify QR */}
-      <div>
-        <div className="font-medium">Scan to notify manager</div>
+        <div className="font-medium mb-2">Scan to notify manager</div>
         <Image
           src={`/api/qr?url=${encodeURIComponent(
             `${baseUrl}/item/${item.id}?notify=1`
-          )}&v=2`}
-          alt="QR to notify"
-          width={160}
-          height={160}
+          )}&v=3`}
+          alt="Scan to notify"
+          width={180}
+          height={180}
           className="border rounded"
           unoptimized
         />
-      </div>
-
-      {/* Manual notify button */}
-      <div>
-        <button
-          onClick={() => void emailReplenish()}
-          className="bg-black text-white px-4 py-2 rounded"
-        >
-          Email manager: out of stock
-        </button>
-        {message && <div className="mt-2 text-sm text-gray-700">{message}</div>}
       </div>
     </div>
   );

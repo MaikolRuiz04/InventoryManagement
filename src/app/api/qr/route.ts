@@ -1,3 +1,4 @@
+// src/app/api/qr/route.ts
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
@@ -10,7 +11,10 @@ export async function GET(req: NextRequest) {
   if (!payload) return new Response("Missing id or url", { status: 400 });
 
   const png = await QRCode.toBuffer(payload, { margin: 1, width: 512 });
-  return new Response(png, {
+
+  // Wrap Buffer so TS is happy with BodyInit
+  const body = new Blob([png], { type: "image/png" });
+  return new Response(body, {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "max-age=31536000, immutable",

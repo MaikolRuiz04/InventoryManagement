@@ -357,7 +357,7 @@ export default function ItemPage() {
 
       {/* Single QR = scan to notify */}
       <div className="mt-6">
-        <div className="font-medium mb-2">Scan to notify manager</div>
+        <div className="font-medium mb-2">Low Stock? Scan to notify manager</div>
         <div className="inline-flex flex-col items-center gap-2">
           <NextImage
             src={qrUrl}

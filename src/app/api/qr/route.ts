@@ -7,17 +7,18 @@ import QRCode from "qrcode";
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   const url = req.nextUrl.searchParams.get("url");
-  const payload = url ?? (id ? `${process.env.NEXT_PUBLIC_BASE_URL}/item/${id}` : null);
+  const payload =
+    url ?? (id ? `${process.env.NEXT_PUBLIC_BASE_URL}/item/${id}` : null);
 
   if (!payload) {
     return new Response("Missing id or url", { status: 400 });
   }
 
-  // Generate as Node Buffer
+  // Generate PNG as a Node Buffer
   const buf = await QRCode.toBuffer(payload, { margin: 1, width: 512 });
 
-  // Convert Buffer -> Uint8Array so Response(body) type is valid
-  const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  // Wrap Buffer in a Blob (BodyInit-compatible)
+  const body = new Blob([buf], { type: "image/png" });
 
   return new Response(body, {
     headers: {

@@ -183,7 +183,7 @@ export default function ItemPage() {
         <div className="inline-flex flex-col items-center gap-2">
           <Image
             src={qrUrl}
-            alt="Scan to notify"
+            alt="Low in Stock? Scan to notify"
             width={180}
             height={180}
             className="border rounded"

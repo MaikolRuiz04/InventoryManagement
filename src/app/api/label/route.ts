@@ -1,70 +1,67 @@
-// src/app/api/label/route.ts
+// src/app/api/notify-email/route.ts
 export const runtime = "nodejs";
 
-import { NextRequest } from "next/server";
-import QRCode from "qrcode";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { createTransport } from "nodemailer";
 
-function escapeXML(s: string) {
-  return s.replace(/[&<>"']/g, (ch) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as const)[ch]!
-  );
-}
+export async function POST(req: NextRequest) {
+  try {
+    const { itemId, itemName, message } = await req.json();
 
-export async function GET(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
-  const name = req.nextUrl.searchParams.get("name") ?? "";
-  const print = req.nextUrl.searchParams.get("print") === "1";
-  if (!id) return new Response("Missing id", { status: 400 });
+    const user = process.env.SMTP_USER || "";
+    const pass = process.env.SMTP_PASS || "";
+    const to = process.env.NOTIFY_TO || "";
+    const from = process.env.NOTIFY_FROM || `Lab Inventory <${user}>`;
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "";
 
-  // Always use NEXT_PUBLIC_BASE_URL for stable public QR targets
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
-  if (!base) {
-    return new Response("Missing NEXT_PUBLIC_BASE_URL", { status: 500 });
+    if (!user || !pass || !to) {
+      return NextResponse.json(
+        { error: "Email not configured", missing: { user: !!user, pass: !!pass, to: !!to } },
+        { status: 500 }
+      );
+    }
+
+    // Gmail + app password
+    const transporter = createTransport({
+      service: "gmail",
+      auth: { user, pass },
+    });
+
+    // Optional: verify SMTP login. Helpful for debugging.
+    try {
+      await transporter.verify();
+    } catch (e) {
+      console.error("SMTP verify failed:", e);
+      return NextResponse.json({ error: "SMTP verify failed" }, { status: 500 });
+    }
+
+    const subject = `Replenish request: ${itemName ?? itemId}`;
+    const lines = [
+      "Hey, this is an automated message from the Lab Inventory Management System.",
+      `It's been notified that ${itemName ?? itemId} should be replenished.`,
+      base && itemId ? `Item link: ${base}/item/${itemId}` : "",
+      message ? `Note: ${message}` : "",
+    ].filter(Boolean);
+
+    const result = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      text: lines.join("\n"),
+      html: lines.map((l) => `<p>${l}</p>`).join(""),
+    });
+
+    // Return nodemailer result so we can see accepted/rejected
+    return NextResponse.json({
+      ok: true,
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+      response: result.response,
+    });
+  } catch (e) {
+    console.error("notify-email error:", e);
+    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
-
-  const target = `${base}/item/${encodeURIComponent(id)}?notify=1`;
-
-  // QR as SVG (crisp, printable)
-  const qrSize = 220;
-  const qrSvg = await QRCode.toString(target, {
-    type: "svg",
-    margin: 0,
-    width: qrSize,
-  });
-
-  // Compose label SVG: white bg + QR + name + tagline
-  const W = 340, H = 340;
-  const qrX = (W - qrSize) / 2, qrY = 20;
-  const nameY = qrY + qrSize + 24;
-  const tagY = nameY + 20;
-
-  const labelSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="100%" height="100%" fill="#ffffff"/>
-  <g transform="translate(${qrX}, ${qrY})">
-    ${qrSvg}
-  </g>
-  <text x="${W / 2}" y="${nameY}" font-family="Inter,system-ui,Segoe UI,Roboto,Arial"
-        font-size="16" font-weight="600" fill="#111" text-anchor="middle">${escapeXML(name)}</text>
-  <text x="${W / 2}" y="${tagY}" font-family="Inter,system-ui,Segoe UI,Roboto,Arial"
-        font-size="12" fill="#444" text-anchor="middle">Low in Stock? Scan to notify manager</text>
-</svg>`.trim();
-
-  if (print) {
-    const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Print Label</title>
-<style>@page{margin:10mm}html,body{height:100%}body{margin:0;display:flex;align-items:center;justify-content:center;background:#fff}</style>
-</head><body>
-${labelSvg}
-<script>window.onload=()=>{window.print();window.close();};</script>
-</body></html>`;
-    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  }
-
-  return new Response(labelSvg, {
-    headers: {
-      "Content-Type": "image/svg+xml; charset=utf-8",
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
-  });
 }

@@ -1,9 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -29,8 +25,11 @@ export default function ItemPage() {
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Always use NEXT_PUBLIC_BASE_URL for QR targets (public)
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
+  // Works on localhost, preview, prod
+  const baseUrl = useMemo(() => {
+    if (typeof window !== "undefined") return window.location.origin;
+    return process.env.NEXT_PUBLIC_BASE_URL ?? "";
+  }, []);
 
   // Load item
   useEffect(() => {
@@ -73,22 +72,52 @@ export default function ItemPage() {
     }
   }, [item, search, emailReplenish]);
 
-  // Label image (QR + name + tagline baked in)
-  const labelSrc = useMemo(() => {
+  // Build the QR URL once we have item
+  const qrUrl = useMemo(() => {
     if (!item) return "";
-    return `/api/label?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(
-      item.name
-    )}&v=5`;
-  }, [item]);
+    return `/api/qr?url=${encodeURIComponent(
+      `${baseUrl}/item/${item.id}?notify=1`
+    )}&v=3`;
+  }, [baseUrl, item]);
 
-  // Print page that auto prints
+  // Print a clean label: QR + name + small ID
   const handlePrint = useCallback(() => {
     if (!item) return;
-    const url = `/api/label?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(
-      item.name
-    )}&print=1`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [item]);
+    const printWin = window.open("", "_blank", "noopener,noreferrer");
+    if (!printWin) return;
+
+    const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    printWin.document.write(`
+      <html>
+        <head>
+          <title>Print Label - ${safeName}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <style>
+            @page { margin: 12mm; }
+            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji"; }
+            .wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+            .name { font-size: 18px; font-weight: 600; text-align: center; }
+            .id { font-size: 12px; color: #555; text-align: center; }
+            .qr { width: 220px; height: 220px; }
+            .hint { font-size: 11px; color: #777; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <img class="qr" src="${qrUrl}" alt="QR" />
+            <div class="name">${safeName}</div>
+            <div class="id">${item.id}</div>
+            <div class="hint">Scan to notify manager</div>
+          </div>
+          <script>
+            window.onload = () => { window.print(); window.close(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  }, [item, qrUrl]);
 
   if (loading) return <div className="p-6">Loading…</div>;
   if (err || !item) return <div className="p-6 text-red-600">Item not found.</div>;
@@ -113,7 +142,7 @@ export default function ItemPage() {
     );
   }
 
-  // Regular item page (details + single label + print)
+  // Regular item page (details + single "notify" QR + name + print)
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">{item.name}</h1>
@@ -148,18 +177,20 @@ export default function ItemPage() {
 
       {item.notes && <div className="whitespace-pre-wrap">{item.notes}</div>}
 
-      {/* Single label image (QR + name + tagline) */}
+      {/* Single QR = scan to notify */}
       <div className="mt-6">
-        <div className="font-medium mb-2">Label (scan to notify)</div>
+        <div className="font-medium mb-2">Scan to notify manager</div>
         <div className="inline-flex flex-col items-center gap-2">
           <Image
-            src={labelSrc}
-            alt="Label: scan to notify"
-            width={340}
-            height={340}
-            className="border rounded bg-white"
+            src={qrUrl}
+            alt="Scan to notify"
+            width={180}
+            height={180}
+            className="border rounded"
             unoptimized
           />
+          {/* Name under the QR */}
+          <div className="text-sm font-medium text-center">{item.name}</div>
           <button
             onClick={handlePrint}
             className="mt-2 bg-black text-white px-4 py-2 rounded hover:opacity-90"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
@@ -27,6 +27,7 @@ export default function NewItemPage() {
     notes: "",
   });
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const [createdName, setCreatedName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,17 +54,32 @@ export default function NewItemPage() {
       const { data, error } = await supabase
         .from("items")
         .insert(payload)
-        .select("id")
+        .select("id,name")
         .single();
 
       if (error) throw error;
+
       setCreatedId(data!.id);
+      setCreatedName(data!.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create item");
     } finally {
       setSaving(false);
     }
   }
+
+  // Label image + print URL (QR + name + tagline baked in)
+  const labelSrc = createdId
+    ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
+        createdName || form.name
+      )}&v=4`
+    : "";
+
+  const printUrl = createdId
+    ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
+        createdName || form.name
+      )}&print=1`
+    : "";
 
   return (
     <div className="max-w-2xl">
@@ -156,20 +172,26 @@ export default function NewItemPage() {
         {error && <p className="text-red-600">{error}</p>}
       </form>
 
-      {/* After create: show the single "notify" QR only */}
+      {/* After create: single printable label */}
       {createdId && (
         <div className="mt-8">
-          <h2 className="font-medium mb-2">Label QR (scan to notify)</h2>
+          <h2 className="font-medium mb-2">Label (scan to notify)</h2>
           <Image
-            src={`/api/qr?url=${encodeURIComponent(
-              `${baseUrl}/item/${createdId}?notify=1`
-            )}&v=3`}
-            alt="Notify QR"
-            width={180}
-            height={180}
-            className="border rounded"
+            src={labelSrc}
+            alt="Label"
+            width={340}
+            height={340}
+            className="border rounded bg-white"
             unoptimized
           />
+          <div className="mt-2">
+            <button
+              onClick={() => window.open(printUrl, "_blank", "noopener,noreferrer")}
+              className="bg-black text-white px-4 py-2 rounded hover:opacity-90"
+            >
+              Print label
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -80,56 +80,208 @@ export default function ItemPage() {
     )}&v=3`;
   }, [baseUrl, item]);
 
-  // Print a clean label: QR + name + small ID
+  // Print a clean label: single composed IMAGE = QR + name + Low/OK + small ID
   const handlePrint = useCallback(() => {
-  if (!item) return;
-  const printWin = window.open("", "_blank", "noopener,noreferrer");
-  if (!printWin) return;
+    if (!item) return;
 
-  const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const low = item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
+    // Compute low/ok locally (do not alter other code paths)
+    const isLow =
+      item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
 
-  printWin.document.write(`
-    <html>
-      <head>
-        <title>Print Label - ${safeName}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>
-          @page { margin: 12mm; }
-          body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji"; }
-          .wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-          .name { font-size: 18px; font-weight: 600; text-align: center; }
-          .status {
-            font-size: 14px;
-            font-weight: 500;
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: ${low ? "#b91c1c" : "#065f46"};
-            background-color: ${low ? "#fee2e2" : "#d1fae5"};
-            text-align: center;
-          }
-          .id { font-size: 12px; color: #555; text-align: center; }
-          .qr { width: 220px; height: 220px; }
-          .hint { font-size: 11px; color: #777; text-align: center; }
-        </style>
-      </head>
-      <body>
-        <div class="wrap">
-          <img class="qr" src="${qrUrl}" alt="QR" />
-          <div class="name">${safeName}</div>
-          ${item.type === "consumable" ? `<div class="status">${low ? "Low" : "OK"}</div>` : ""}
-          <div class="id">${item.id}</div>
-          <div class="hint">Scan to notify manager</div>
-        </div>
-        <script>
-          window.onload = () => { window.print(); window.close(); };
-        </script>
-      </body>
-    </html>
-  `);
-  printWin.document.close();
-}, [item, qrUrl]);
+    // Absolute QR URL prevents blank images in a new window
+    const absoluteQr = qrUrl.startsWith("http")
+      ? qrUrl
+      : `${baseUrl}${qrUrl}`;
 
+    const printWin = window.open("", "_blank", "noopener,noreferrer");
+    if (!printWin) return;
+
+    const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // Write a minimal HTML shell that draws onto a canvas, converts to a single IMG, then prints
+    printWin.document.open();
+    printWin.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Print Label - ${safeName}</title>
+          <style>
+            @page { margin: 12mm; }
+            body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji"; }
+            .wrap { display: flex; align-items: center; justify-content: center; padding: 16px; }
+            img.final { max-width: 100%; height: auto; display: block; }
+          </style>
+          <base href="${baseUrl}/">
+        </head>
+        <body>
+          <div class="wrap">
+            <canvas id="c" width="340" height="380" style="display:none"></canvas>
+            <img id="final" class="final" alt="Label"/>
+          </div>
+          <script>
+            (function() {
+              const qrSrc = ${JSON.stringify(absoluteQr)};
+              const name = ${JSON.stringify(item.name)};
+              const id = ${JSON.stringify(item.id)};
+              const isLow = ${JSON.stringify(isLow)};
+
+              const canvas = document.getElementById('c');
+              const ctx = canvas.getContext('2d');
+
+              // Layout constants
+              const W = canvas.width;           // 340
+              const H = canvas.height;          // 380
+              const P = 12;                     // padding
+              const QR_SIZE = 260;              // QR side
+              const TOP = P;                    // top margin
+
+              // Colors matching UI badges (approx)
+              const okBg = '#d1fae5';
+              const okFg = '#065f46';
+              const lowBg = '#fee2e2';
+              const lowFg = '#b91c1c';
+
+              // Draw white background
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, W, H);
+
+              // Load QR then draw
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = function() {
+                // Center QR
+                const qrX = (W - QR_SIZE) / 2;
+                ctx.drawImage(img, qrX, TOP, QR_SIZE, QR_SIZE);
+
+                // Name text
+                ctx.fillStyle = '#111827';
+                ctx.font = '600 20px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                const nameY = TOP + QR_SIZE + 10;
+                // Wrap name if too long (simple wrap)
+                const maxWidth = W - P*2;
+                const lines = wrapText(ctx, name, maxWidth);
+                let textY = nameY;
+                lines.forEach(line => {
+                  ctx.fillText(line, W/2, textY);
+                  textY += 22;
+                });
+
+                // Status badge (only for consumables)
+                if (${JSON.stringify(item.type)} === 'consumable') {
+                  const label = isLow ? 'Low' : 'OK';
+                  const fg = isLow ? lowFg : okFg;
+                  const bg = isLow ? lowBg : okBg;
+
+                  ctx.font = '500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                  const padX = 8, padY = 4;
+                  const txtW = ctx.measureText(label).width;
+                  const badgeW = txtW + padX*2;
+                  const badgeH = 22;
+                  const badgeX = (W - badgeW) / 2;
+                  const badgeY = textY + 4;
+
+                  // rounded rect
+                  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 6, bg);
+                  // text
+                  ctx.fillStyle = fg;
+                  ctx.textBaseline = 'middle';
+                  ctx.fillText(label, W/2, badgeY + badgeH/2);
+
+                  textY = badgeY + badgeH;
+                }
+
+                // Small ID text
+                ctx.font = '400 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                ctx.fillStyle = '#6b7280';
+                ctx.textBaseline = 'top';
+                ctx.fillText(id, W/2, textY + 8);
+
+                // Convert to image and print
+                const final = document.getElementById('final');
+                final.onload = function() {
+                  // Ensure image is in DOM, then print
+                  setTimeout(function(){
+                    window.print();
+                    window.close();
+                  }, 50);
+                };
+                final.src = canvas.toDataURL('image/png');
+              };
+              img.onerror = function() {
+                // If QR fails, still print something to avoid blank window
+                ctx.fillStyle = '#ef4444';
+                ctx.font = '600 18px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('QR failed to load', W/2, H/2);
+                const final = document.getElementById('final');
+                final.onload = function() {
+                  setTimeout(function(){
+                    window.print();
+                    window.close();
+                  }, 50);
+                };
+                final.src = canvas.toDataURL('image/png');
+              };
+              img.src = qrSrc;
+
+              // Helpers
+              function wrapText(ctx, text, maxWidth) {
+                const words = text.split(/\\s+/);
+                const lines = [];
+                let line = '';
+                for (let i=0; i<words.length; i++) {
+                  const test = line ? line + ' ' + words[i] : words[i];
+                  if (ctx.measureText(test).width <= maxWidth) {
+                    line = test;
+                  } else {
+                    if (line) lines.push(line);
+                    line = words[i];
+                  }
+                }
+                if (line) lines.push(line);
+                // Limit to 2 lines, ellipsize
+                if (lines.length > 2) {
+                  const first = lines[0];
+                  let second = '';
+                  // Rebuild second line with ellipsis if needed
+                  for (let i=1; i<lines.length; i++) {
+                    const candidate = second ? (second + ' ' + lines[i]) : lines[i];
+                    if (ctx.measureText(candidate + '…').width <= maxWidth) {
+                      second = candidate;
+                    } else {
+                      break;
+                    }
+                  }
+                  lines.length = 2;
+                  lines[0] = first;
+                  lines[1] = second + '…';
+                }
+                return lines;
+              }
+
+              function roundRect(ctx, x, y, w, h, r, fill) {
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+                ctx.fillStyle = fill;
+                ctx.fill();
+              }
+            })();
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  }, [item, qrUrl, baseUrl]);
 
   if (loading) return <div className="p-6">Loading…</div>;
   if (err || !item) return <div className="p-6 text-red-600">Item not found.</div>;

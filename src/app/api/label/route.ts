@@ -1,10 +1,8 @@
-// src/app/api/label/route.ts
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import QRCode from "qrcode";
 
-// basic XML escape for text nodes
 function escapeXML(s: string) {
   return s.replace(/[&<>"']/g, (ch) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as const)[ch]!
@@ -15,30 +13,25 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   const name = req.nextUrl.searchParams.get("name") ?? "";
   const print = req.nextUrl.searchParams.get("print") === "1";
-
   if (!id) return new Response("Missing id", { status: 400 });
 
-  // Build base URL that works on localhost, preview, prod
-  const proto = req.headers.get("x-forwarded-proto") ?? "https";
-  const host = req.headers.get("host") ?? "";
-  const fallbackBase = host ? `${proto}://${host}` : "";
-  const base = process.env.NEXT_PUBLIC_BASE_URL || fallbackBase;
+  // Always derive base from the incoming request (ignore env var to avoid mismatches)
+  const proto =
+    req.headers.get("x-forwarded-proto") ??
+    (req.headers.get("x-vercel-proto") ?? "https");
+  const host =
+    req.headers.get("x-forwarded-host") ??
+    req.headers.get("host") ??
+    "";
+  const base = host ? `${proto}://${host}` : "";
 
   const target = `${base}/item/${encodeURIComponent(id)}?notify=1`;
 
-  // Generate QR as SVG (no binary headaches)
   const qrSize = 220;
-  const qrSvg = await QRCode.toString(target, {
-    type: "svg",
-    margin: 0,
-    width: qrSize,
-  });
+  const qrSvg = await QRCode.toString(target, { type: "svg", margin: 0, width: qrSize });
 
-  // Compose a single label SVG: white background + QR + name + tagline
-  const W = 340;
-  const H = 340;
-  const qrX = (W - qrSize) / 2;
-  const qrY = 20;
+  const W = 340, H = 340;
+  const qrX = (W - qrSize) / 2, qrY = 20;
   const nameY = qrY + qrSize + 24;
   const tagY = nameY + 20;
 
@@ -58,19 +51,13 @@ export async function GET(req: NextRequest) {
   </text>
 </svg>`.trim();
 
-  // If ?print=1, return a tiny HTML wrapper that auto-prints the inline SVG
   if (print) {
     const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Print Label</title>
-<style>
-  @page { margin: 10mm; }
-  html,body { height: 100%; }
-  body { margin: 0; display: flex; align-items: center; justify-content: center; }
-</style>
-</head>
-<body>
+<style>@page{margin:10mm}html,body{height:100%}body{margin:0;display:flex;align-items:center;justify-content:center}</style>
+</head><body>
 ${labelSvg}
-<script>window.onload = () => { window.print(); window.close(); };</script>
+<script>window.onload=()=>{window.print();window.close();};</script>
 </body></html>`;
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }

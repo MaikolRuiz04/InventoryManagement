@@ -82,42 +82,54 @@ export default function ItemPage() {
 
   // Print a clean label: QR + name + small ID
   const handlePrint = useCallback(() => {
-    if (!item) return;
-    const printWin = window.open("", "_blank", "noopener,noreferrer");
-    if (!printWin) return;
+  if (!item) return;
+  const printWin = window.open("", "_blank", "noopener,noreferrer");
+  if (!printWin) return;
 
-    const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const low = item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
 
-    printWin.document.write(`
-      <html>
-        <head>
-          <title>Print Label - ${safeName}</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <style>
-            @page { margin: 12mm; }
-            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji"; }
-            .wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-            .name { font-size: 18px; font-weight: 600; text-align: center; }
-            .id { font-size: 12px; color: #555; text-align: center; }
-            .qr { width: 220px; height: 220px; }
-            .hint { font-size: 11px; color: #777; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="wrap">
-            <img class="qr" src="${qrUrl}" alt="QR" />
-            <div class="name">${safeName}</div>
-            <div class="id">${item.id}</div>
-            <div class="hint">Scan to notify manager</div>
-          </div>
-          <script>
-            window.onload = () => { window.print(); window.close(); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWin.document.close();
-  }, [item, qrUrl]);
+  printWin.document.write(`
+    <html>
+      <head>
+        <title>Print Label - ${safeName}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          @page { margin: 12mm; }
+          body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji"; }
+          .wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+          .name { font-size: 18px; font-weight: 600; text-align: center; }
+          .status {
+            font-size: 14px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: ${low ? "#b91c1c" : "#065f46"};
+            background-color: ${low ? "#fee2e2" : "#d1fae5"};
+            text-align: center;
+          }
+          .id { font-size: 12px; color: #555; text-align: center; }
+          .qr { width: 220px; height: 220px; }
+          .hint { font-size: 11px; color: #777; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <img class="qr" src="${qrUrl}" alt="QR" />
+          <div class="name">${safeName}</div>
+          ${item.type === "consumable" ? `<div class="status">${low ? "Low" : "OK"}</div>` : ""}
+          <div class="id">${item.id}</div>
+          <div class="hint">Scan to notify manager</div>
+        </div>
+        <script>
+          window.onload = () => { window.print(); window.close(); };
+        </script>
+      </body>
+    </html>
+  `);
+  printWin.document.close();
+}, [item, qrUrl]);
+
 
   if (loading) return <div className="p-6">Loading…</div>;
   if (err || !item) return <div className="p-6 text-red-600">Item not found.</div>;

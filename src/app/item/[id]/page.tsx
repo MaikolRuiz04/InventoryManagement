@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import NextImage from "next/image"; // ⬅️ alias to avoid clashing with window.Image
+import NextImage from "next/image"; // avoid clash with window.Image
 import { supabase } from "@/lib/supabase";
 
 type Item = {
@@ -103,21 +103,18 @@ export default function ItemPage() {
     const lowFg = "#b91c1c";
 
     const W = canvas.width;
-    const H = canvas.height;
     const P = 12;
     const QR_SIZE = 260;
     const TOP = P;
 
     // background
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, canvas.height);
 
     // loader helper (typed, and explicitly use window.Image)
     function load(imgSrc: string): Promise<HTMLImageElement> {
       return new Promise((resolve, reject) => {
-        const ImgCtor: typeof window.Image =
-          typeof window !== "undefined" ? window.Image : (undefined as any);
-        const img = new ImgCtor();
+        const img = new window.Image();
         img.crossOrigin = "anonymous";
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error(`Failed to load image: ${imgSrc}`));
@@ -208,8 +205,7 @@ export default function ItemPage() {
 
           ctx.font =
             "500 14px system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans";
-          const padX = 8,
-            padY = 4;
+          const padX = 8;
           const txtW = ctx.measureText(label).width;
           const badgeW = txtW + padX * 2;
           const badgeH = 22;

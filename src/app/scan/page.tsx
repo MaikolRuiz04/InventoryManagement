@@ -17,12 +17,13 @@ export default function ScanPage() {
           video: { facingMode: "environment" },
         });
 
-        if (!videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        const vid = videoRef.current;
+        if (!vid) return;
 
-        // Use `undefined` (not null) for default device
-        reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+        vid.srcObject = stream;
+        await vid.play();
+
+        reader.decodeFromVideoDevice(undefined, vid, (result) => {
           if (!mounted) return;
           const text = result?.getText();
           if (!text) return;
@@ -33,26 +34,30 @@ export default function ScanPage() {
             window.location.href = `/item/${encodeURIComponent(text)}`;
           }
         });
-      } catch (e: any) {
-        setErr(e?.message || "Camera error");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setErr(msg || "Camera error");
       }
     })();
 
     return () => {
       mounted = false;
 
-      // Stop ZXing decode loop (handle different versions safely)
-      const anyReader = reader as any;
+      // Stop ZXing (defensive across versions)
+      const anyReader = reader as unknown as {
+        stopContinuousDecode?: () => void;
+        reset?: () => void;
+        stopStreams?: () => void;
+      };
       try {
         anyReader.stopContinuousDecode?.();
         anyReader.reset?.();
         anyReader.stopStreams?.();
-      } catch {
-        // ignore
-      }
+      } catch {}
 
-      // Also stop the camera stream
-      const stream = videoRef.current?.srcObject as MediaStream | null;
+      // Stop camera
+      const vid = videoRef.current;
+      const stream = (vid?.srcObject as MediaStream | null) || null;
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -62,9 +67,7 @@ export default function ScanPage() {
       <h1 className="text-xl font-semibold">Scan</h1>
       <video ref={videoRef} className="w-full rounded border" muted playsInline />
       {err && <p className="text-red-600">{err}</p>}
-      <p className="text-sm text-gray-600">
-        Tip: grant camera permission. On phones, use HTTPS (localhost is OK).
-      </p>
+      <p className="text-sm text-gray-600">Tip: on phones, use your HTTPS Vercel URL.</p>
     </div>
   );
 }

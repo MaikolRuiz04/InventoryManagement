@@ -1,4 +1,5 @@
-// app/api/qr/route.ts
+export const runtime = "nodejs";
+
 import { NextRequest } from "next/server";
 import QRCode from "qrcode";
 

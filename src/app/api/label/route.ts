@@ -16,19 +16,23 @@ export async function GET(req: NextRequest) {
   const print = req.nextUrl.searchParams.get("print") === "1";
   if (!id) return new Response("Missing id", { status: 400 });
 
-  // If PUBLIC_QR_BASE is set, always use it for QR destination.
-  // Otherwise, fall back to the current request host (works locally).
-  const configuredBase = process.env.PUBLIC_QR_BASE?.trim();
-  const proto = req.headers.get("x-forwarded-proto") ?? req.headers.get("x-vercel-proto") ?? "https";
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
-  const requestBase = host ? `${proto}://${host}` : "";
+  // Always use NEXT_PUBLIC_BASE_URL for stable public QR targets
+  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
+  if (!base) {
+    return new Response("Missing NEXT_PUBLIC_BASE_URL", { status: 500 });
+  }
 
-  const base = configuredBase || requestBase;
   const target = `${base}/item/${encodeURIComponent(id)}?notify=1`;
 
+  // QR as SVG (crisp, printable)
   const qrSize = 220;
-  const qrSvg = await QRCode.toString(target, { type: "svg", margin: 0, width: qrSize });
+  const qrSvg = await QRCode.toString(target, {
+    type: "svg",
+    margin: 0,
+    width: qrSize,
+  });
 
+  // Compose label SVG: white bg + QR + name + tagline
   const W = 340, H = 340;
   const qrX = (W - qrSize) / 2, qrY = 20;
   const nameY = qrY + qrSize + 24;
@@ -47,9 +51,13 @@ export async function GET(req: NextRequest) {
 </svg>`.trim();
 
   if (print) {
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Label</title>
-<style>@page{margin:10mm}html,body{height:100%}body{margin:0;display:flex;align-items:center;justify-content:center}</style>
-</head><body>${labelSvg}<script>window.onload=()=>{window.print();window.close();};</script></body></html>`;
+    const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Print Label</title>
+<style>@page{margin:10mm}html,body{height:100%}body{margin:0;display:flex;align-items:center;justify-content:center;background:#fff}</style>
+</head><body>
+${labelSvg}
+<script>window.onload=()=>{window.print();window.close();};</script>
+</body></html>`;
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 

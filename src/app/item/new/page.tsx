@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
@@ -30,11 +30,6 @@ export default function NewItemPage() {
   const [createdName, setCreatedName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const baseUrl = useMemo(() => {
-    if (typeof window !== "undefined") return window.location.origin;
-    return process.env.NEXT_PUBLIC_BASE_URL ?? "";
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,18 +63,19 @@ export default function NewItemPage() {
     }
   }
 
-  // Label image + print URL (QR + name + tagline baked in)
-  const labelSrc = createdId
-    ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
-        createdName || form.name
-      )}&v=4`
-    : "";
+  const labelSrc =
+    createdId && (createdName || form.name)
+      ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
+          createdName || form.name
+        )}&v=5`
+      : "";
 
-  const printUrl = createdId
-    ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
-        createdName || form.name
-      )}&print=1`
-    : "";
+  const printUrl =
+    createdId && (createdName || form.name)
+      ? `/api/label?id=${encodeURIComponent(createdId)}&name=${encodeURIComponent(
+          createdName || form.name
+        )}&print=1`
+      : "";
 
   return (
     <div className="max-w-2xl">
@@ -173,7 +169,7 @@ export default function NewItemPage() {
       </form>
 
       {/* After create: single printable label */}
-      {createdId && (
+      {createdId && labelSrc && (
         <div className="mt-8">
           <h2 className="font-medium mb-2">Label (scan to notify)</h2>
           <Image

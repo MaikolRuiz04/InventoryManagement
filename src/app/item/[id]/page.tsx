@@ -25,11 +25,8 @@ export default function ItemPage() {
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Works on localhost, preview, prod
-  const baseUrl = useMemo(() => {
-    if (typeof window !== "undefined") return window.location.origin;
-    return process.env.NEXT_PUBLIC_BASE_URL ?? "";
-  }, []);
+  // Always use NEXT_PUBLIC_BASE_URL for QR
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
 
   // Load item
   useEffect(() => {
@@ -72,30 +69,13 @@ export default function ItemPage() {
     }
   }, [item, search, emailReplenish]);
 
-  // Single label image (QR + name + tagline)
-  const labelSrc = useMemo(() => {
-    if (!item) return "";
-    return `/api/label?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(
-      item.name
-    )}&v=4`;
-  }, [item]);
-
-  // Opens a clean print page that auto prints
-  const handlePrint = useCallback(() => {
-    if (!item) return;
-    const url = `/api/label?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(
-      item.name
-    )}&print=1`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [item]);
-
   if (loading) return <div className="p-6">Loading…</div>;
   if (err || !item) return <div className="p-6 text-red-600">Item not found.</div>;
 
   const low =
     item.type === "consumable" && (item.qty ?? 0) <= (item.min_qty ?? 0);
 
-  // If this was a notify scan, show a tiny confirmation screen
+  // If this was a notify scan, show confirmation screen
   if (search.get("notify") === "1") {
     return (
       <div className="max-w-md space-y-4">
@@ -112,13 +92,12 @@ export default function ItemPage() {
     );
   }
 
-  // Regular item page (details + single label + print)
+  // Regular item page (shows details + the single "notify" QR)
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">{item.name}</h1>
       <div className="text-sm text-gray-600">Type: {item.type}</div>
       {item.location && <div>Location: {item.location}</div>}
-
       {item.type === "consumable" && (
         <div className="text-sm">
           Qty: <b>{item.qty ?? 0}</b>{" "}
@@ -131,7 +110,6 @@ export default function ItemPage() {
           </span>
         </div>
       )}
-
       {item.buy_link && (
         <div>
           <a
@@ -144,28 +122,21 @@ export default function ItemPage() {
           </a>
         </div>
       )}
-
       {item.notes && <div className="whitespace-pre-wrap">{item.notes}</div>}
 
-      {/* Single label image (QR + name + tagline) */}
+      {/* Single QR = scan to notify */}
       <div className="mt-6">
-        <div className="font-medium mb-2">Label (scan to notify)</div>
-        <div className="inline-flex flex-col items-center gap-2">
-          <Image
-            src={labelSrc}
-            alt="Label: scan to notify"
-            width={340}
-            height={340}
-            className="border rounded bg-white"
-            unoptimized
-          />
-          <button
-            onClick={handlePrint}
-            className="mt-2 bg-black text-white px-4 py-2 rounded hover:opacity-90"
-          >
-            Print label
-          </button>
-        </div>
+        <div className="font-medium mb-2">Low in Stock? Scan to notify manager</div>
+        <Image
+          src={`/api/qr?url=${encodeURIComponent(
+            `${baseUrl}/item/${item.id}?notify=1`
+          )}&v=3`}
+          alt={`QR to notify for ${item.name}`}
+          width={180}
+          height={180}
+          className="border rounded"
+          unoptimized
+        />
       </div>
     </div>
   );

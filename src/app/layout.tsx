@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-50 text-gray-900">
-        <header className="border-b bg-white">
+        <header className="border-b bg-black">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-6">
             <Link href="/" className="font-semibold">Lab Inventory</Link>
             <nav className="text-sm flex gap-4">

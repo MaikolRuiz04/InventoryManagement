@@ -52,7 +52,7 @@
                   <h2 className="font-medium">{it.name}</h2>
                   <span className="text-xs px-2 py-0.5 rounded bg-gray-100">{it.type}</span>
                 </div>
-                {it.location && <div className="text-sm text-gray-600 mt-1">{it.location}</div>}
+                {it.location && <div className="text-sm text-black-600 mt-1">{it.location}</div>}
                 {it.type === "consumable" && (
                   <div className="mt-2 text-sm">
                     Qty: <b>{it.qty ?? 0}</b>{" "}

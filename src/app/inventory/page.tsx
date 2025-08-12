@@ -46,7 +46,7 @@
               <Link
                 key={it.id}
                 href={`/item/${it.id}`}
-                className="border rounded-lg p-4 bg-white hover:shadow"
+                className="border rounded-lg p-4 bg-black hover:shadow"
               >
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="font-medium">{it.name}</h2>
